@@ -1,0 +1,27 @@
+# permissions for end users to view argoworkflows.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: argoworkflow-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: argo-workflow-operator
+    app.kubernetes.io/part-of: argo-workflow-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: argoworkflow-viewer-role
+rules:
+- apiGroups:
+  - stack.zncdata.net
+  resources:
+  - argoworkflows
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - stack.zncdata.net
+  resources:
+  - argoworkflows/status
+  verbs:
+  - get
