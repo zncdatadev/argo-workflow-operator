@@ -9,4 +9,18 @@ metadata:
     app.kubernetes.io/created-by: argo-workflow-operator
   name: argoworkflow-sample
 spec:
-  # TODO(user): Add fields here
+  replicas: 1
+  image:
+    repository: bitnami/argo-workflow-controller
+    tag: 3.5.0
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+  service:
+    port: 18080
+    type: ClusterIP
+  securityContext:
+    runAsUser: 1000
+    fsGroup: 1000
