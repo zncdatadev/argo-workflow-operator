@@ -100,7 +100,7 @@ func (r *ArgoWorkFlowReconciler) makeDeployment(instance *stackv1alpha1.ArgoWork
 							ImagePullPolicy: instance.Spec.Image.PullPolicy,
 							Args: []string{
 								"--configmap",
-								"argo-wrokflows-argo-workflows-controller",
+								instance.GetNameWithSuffix("-controller"),
 								"--executor-image",
 								"docker.io/bitnami/argo-workflow-exec:3.5.0-debian-11-r0",
 								"--executor-image-pull-policy",
@@ -249,7 +249,14 @@ func (r *ArgoWorkFlowReconciler) makeConfigMap(ctx context.Context, instance *st
 			Labels:    labels,
 		},
 		Data: map[string]string{
-			"config": "parallelism: \nnamespaceParallelism: \nexecutor: \n  resources: \n    limits: {} \n    requests: {} \n",
+			"config": `
+parallelism:
+namespaceParallelism:
+executor:
+  resources:
+    limits: {}
+    requests: {}
+`,
 		},
 	}
 
