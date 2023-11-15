@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"github.com/zncdata-labs/argo-workflow-operator/internal/controller"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -32,13 +33,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	stackv1alpha1 "github.com/zncdata-labs/argo-workflow-operator/api/v1alpha1"
-	"github.com/zncdata-labs/argo-workflow-operator/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme       = runtime.NewScheme()
+	setupLog     = ctrl.Log.WithName("setup")
+	reconcileLog = ctrl.Log.WithName("reconciling")
 )
 
 func init() {
@@ -67,8 +68,6 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "7d91053f.zncdata.net",
@@ -89,7 +88,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.ArgoWorkFlowReconciler{
+	if err = (&controller.ArgoWorkFlowReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
