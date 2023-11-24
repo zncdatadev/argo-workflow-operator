@@ -52,6 +52,15 @@ type ArgoWorkFlowSpec struct {
 	Annotations map[string]string `json:"annotations"`
 
 	// +kubebuilder:validation:Optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	Affinity *corev1.Affinity `json:"affinity"`
+
+	// +kubebuilder:validation:Optional
+	Tolerations *corev1.Toleration `json:"tolerations,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=true
 	ServiceAccount bool `json:"serviceAccount"`
 }
