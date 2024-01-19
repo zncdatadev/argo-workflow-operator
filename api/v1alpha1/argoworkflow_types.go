@@ -17,13 +17,31 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/zncdata-labs/operator-go/pkg/status"
 	corev1 "k8s.io/api/core/v1"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+
+// ArgoWorkFlow is the Schema for the argoworkflows API
+type ArgoWorkFlow struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ArgoWorkFlowSpec `json:"spec,omitempty"`
+	Status status.Status    `json:"status,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+
+// ArgoWorkFlowList contains a list of ArgoWorkFlow
+type ArgoWorkFlowList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ArgoWorkFlow `json:"items"`
+}
 
 // ArgoWorkFlowSpec defines the desired state of ArgoWorkFlow
 type ArgoWorkFlowSpec struct {
@@ -31,43 +49,52 @@ type ArgoWorkFlowSpec struct {
 	Image *ImageSpec `json:"image"`
 
 	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=65535
+	RoleConfig *RoleConfigSpec `json:"roleConfig"`
+
+	// +kubebuilder:validation:Optional
+	RoleGroups map[string]*RoleConfigSpec `json:"roleGroups"`
+
+	// +kubebuilder:validation:Optional
+	Labels map[string]string `json:"labels"`
+}
+
+type RoleConfigSpec struct {
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=1
-	Replicas int32 `json:"replicas,omitempty"`
+	Replicas int32 `json:"replicas"`
 
-	// +kubebuilder:validation:Required
-	Resources *corev1.ResourceRequirements `json:"resources"`
-
-	// +kubebuilder:validation:Required
-	SecurityContext *corev1.PodSecurityContext `json:"securityContext"`
+	// +kubebuilder:validation:Optional
+	Image *ImageSpec `json:"image"`
 
 	// +kubebuilder:validation:Required
 	Service *ServiceSpec `json:"service"`
 
 	// +kubebuilder:validation:Optional
-	Labels map[string]string `json:"labels"`
+	SecurityContext *corev1.PodSecurityContext `json:"securityContext"`
 
 	// +kubebuilder:validation:Optional
-	Annotations map[string]string `json:"annotations"`
-
-	// +kubebuilder:validation:Optional
-	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	MatchLabels map[string]string `json:"matchLabels,omitempty"`
 
 	// +kubebuilder:validation:Optional
 	Affinity *corev1.Affinity `json:"affinity"`
 
 	// +kubebuilder:validation:Optional
-	Tolerations *corev1.Toleration `json:"tolerations,omitempty"`
+	NodeSelector map[string]string `json:"nodeSelector"`
+
+	// +kubebuilder:validation:Optional
+	Tolerations *corev1.Toleration `json:"tolerations"`
 
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default:=true
-	ServiceAccount bool `json:"serviceAccount"`
+	ServiceAccount *bool `json:"serviceAccount"`
+
+	// +kubebuilder:validation:Optional
+	Config *ConfigSpec `json:"config"`
 }
 
-func (argoWorkflow *ArgoWorkFlow) GetNameWithSuffix(suffix string) string {
-	// return ArgoWorkFlow.GetName() + rand.String(5) + suffix
-	return argoWorkflow.GetName() + suffix
+type ConfigSpec struct {
+	// +kubebuilder:validation:Optional
+	Resources *corev1.ResourceRequirements `json:"resources"`
 }
 
 type ImageSpec struct {
@@ -94,73 +121,21 @@ type ServiceSpec struct {
 	Port int32 `json:"port"`
 }
 
-// SetStatusCondition updates the status condition using the provided arguments.
-// If the condition already exists, it updates the condition; otherwise, it appends the condition.
-// If the condition status has changed, it updates the condition's LastTransitionTime.
-func (argoWorkflow *ArgoWorkFlow) SetStatusCondition(condition metav1.Condition) {
-	// if the condition already exists, update it
-	existingCondition := apimeta.FindStatusCondition(argoWorkflow.Status.Conditions, condition.Type)
-	if existingCondition == nil {
-		condition.ObservedGeneration = argoWorkflow.GetGeneration()
-		condition.LastTransitionTime = metav1.Now()
-		argoWorkflow.Status.Conditions = append(argoWorkflow.Status.Conditions, condition)
-	} else if existingCondition.Status != condition.Status || existingCondition.Reason != condition.Reason || existingCondition.Message != condition.Message {
-		existingCondition.Status = condition.Status
-		existingCondition.Reason = condition.Reason
-		existingCondition.Message = condition.Message
-		existingCondition.ObservedGeneration = argoWorkflow.GetGeneration()
-		existingCondition.LastTransitionTime = metav1.Now()
-	}
-}
-
-// InitStatusConditions initializes the status conditions to the provided conditions.
-func (argoWorkflow *ArgoWorkFlow) InitStatusConditions() {
-	argoWorkflow.Status.Conditions = []metav1.Condition{}
-	argoWorkflow.SetStatusCondition(metav1.Condition{
-		Type:               ConditionTypeProgressing,
-		Status:             metav1.ConditionTrue,
-		Reason:             ConditionReasonPreparing,
-		Message:            "ArgoWorkFlow is preparing",
-		ObservedGeneration: argoWorkflow.GetGeneration(),
-		LastTransitionTime: metav1.Now(),
-	})
-	argoWorkflow.SetStatusCondition(metav1.Condition{
-		Type:               ConditionTypeAvailable,
-		Status:             metav1.ConditionFalse,
-		Reason:             ConditionReasonPreparing,
-		Message:            "ArgoWorkFlow is preparing",
-		ObservedGeneration: argoWorkflow.GetGeneration(),
-		LastTransitionTime: metav1.Now(),
-	})
-}
-
 // ArgoWorkFlowStatus defines the observed state of ArgoWorkFlow
 type ArgoWorkFlowStatus struct {
 	// +kubebuilder:validation:Optional
 	Conditions []metav1.Condition `json:"condition,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-
-// ArgoWorkFlow is the Schema for the argoworkflows API
-type ArgoWorkFlow struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec   ArgoWorkFlowSpec   `json:"spec,omitempty"`
-	Status ArgoWorkFlowStatus `json:"status,omitempty"`
-}
-
-//+kubebuilder:object:root=true
-
-// ArgoWorkFlowList contains a list of ArgoWorkFlow
-type ArgoWorkFlowList struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ArgoWorkFlow `json:"items"`
-}
-
 func init() {
 	SchemeBuilder.Register(&ArgoWorkFlow{}, &ArgoWorkFlowList{})
+}
+
+func (a *ArgoWorkFlow) GetNameWithSuffix(suffix string) string {
+	// return ArgoWorkFlow.GetName() + rand.String(5) + suffix
+	return a.GetName() + suffix
+}
+func (a *ArgoWorkFlow) InitStatusConditions() {
+	a.Status.InitStatus(a)
+	a.Status.InitStatusConditions()
 }

@@ -9,18 +9,23 @@ metadata:
     app.kubernetes.io/created-by: argo-workflow-operator
   name: argoworkflow-sample
 spec:
-  replicas: 1
+  roleConfig:
+    replicas: 3
+    config:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
   image:
     repository: bitnami/argo-workflow-controller
     tag: 3.5.0
     pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 100m
-      memory: 512Mi
   service:
     port: 18080
     type: ClusterIP
   securityContext:
     runAsUser: 1000
     fsGroup: 1000
+  roleGroups:
+    default:
+      replicas: 1
