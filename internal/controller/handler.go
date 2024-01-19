@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-
 	stackv1alpha1 "github.com/zncdata-labs/argo-workflow-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -10,98 +9,90 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func (r *ArgoWorkFlowReconciler) makeService(instance *stackv1alpha1.ArgoWorkFlow, schema *runtime.Scheme) *corev1.Service {
-	labels := instance.GetLabels()
-	svc := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        instance.Name,
-			Namespace:   instance.Namespace,
-			Labels:      labels,
-			Annotations: instance.Spec.Service.Annotations,
-		},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Port:     instance.Spec.Service.Port,
-					Name:     "http",
-					Protocol: "TCP",
-				},
-			},
-			Selector: labels,
-			Type:     instance.Spec.Service.Type,
-		},
-	}
-	err := ctrl.SetControllerReference(instance, svc, schema)
-	if err != nil {
-		r.Log.Error(err, "Failed to set controller reference for service")
-		return nil
-	}
-	return svc
-}
-
 func (r *ArgoWorkFlowReconciler) reconcileService(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
-	obj := r.makeService(instance, r.Scheme)
-	if obj == nil {
-		return nil
-	}
-
-	if err := CreateOrUpdate(ctx, r.Client, obj); err != nil {
-		r.Log.Error(err, "Failed to create or update service")
+	err := r.createOrUpdateResource(ctx, instance, r.extractServiceForRoleGroup)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *ArgoWorkFlowReconciler) makeDeployment(instance *stackv1alpha1.ArgoWorkFlow, schema *runtime.Scheme) *appsv1.Deployment {
-	labels := instance.GetLabels()
-	envVars := []corev1.EnvVar{}
+func (r *ArgoWorkFlowReconciler) extractServiceForRoleGroup(instance *stackv1alpha1.ArgoWorkFlow, _ context.Context,
+	groupName string, roleGroup *stackv1alpha1.RoleConfigSpec, scheme *runtime.Scheme) (client.Object, error) {
+	mergeLabels := r.mergeLabels(instance.GetLabels(), roleGroup)
+	port, svcType, annotations := r.getServiceInfo(instance.Spec.RoleConfig.Service, roleGroup)
 
-	envVars = append(envVars, corev1.EnvVar{
-		Name: "ARGO_NAMESPACE",
-		ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{
-				APIVersion: "v1",
-				FieldPath:  "metadata.namespace",
-			},
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        instance.GetNameWithSuffix(groupName),
+			Namespace:   instance.Namespace,
+			Labels:      mergeLabels,
+			Annotations: annotations,
 		},
-	})
-	envVars = append(envVars, corev1.EnvVar{
-		Name: "LEADER_ELECTION_IDENTITY",
-		ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{
-				APIVersion: "v1",
-				FieldPath:  "metadata.name",
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Port:     port,
+					Name:     "http",
+					Protocol: "TCP",
+				},
 			},
+			Selector: mergeLabels,
+			Type:     svcType,
 		},
-	})
+	}
+	err := ctrl.SetControllerReference(instance, svc, scheme)
+	if err != nil {
+		r.Log.Error(err, "Failed to set controller reference for service")
+		return nil, err
+	}
+	return svc, nil
+}
+
+// reconcile deployment
+func (r *ArgoWorkFlowReconciler) reconcileDeployment(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
+	err := r.createOrUpdateResource(ctx, instance, r.extractDeploymentForRoleGroup)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// extract deployment for role group
+func (r *ArgoWorkFlowReconciler) extractDeploymentForRoleGroup(instance *stackv1alpha1.ArgoWorkFlow, _ context.Context,
+	groupName string, roleGroup *stackv1alpha1.RoleConfigSpec, scheme *runtime.Scheme) (client.Object, error) {
+	mergeLabels := r.mergeLabels(instance.GetLabels(), roleGroup)
+	image, securityContext, replicas, envVars, resources := r.getDeploymentInfo(instance, roleGroup)
+
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name,
+			Name:      instance.GetNameWithSuffix(groupName),
 			Namespace: instance.Namespace,
-			Labels:    labels,
+			Labels:    mergeLabels,
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &instance.Spec.Replicas,
+			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: mergeLabels,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels: mergeLabels,
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: instance.GetNameWithSuffix("-controller"),
-					SecurityContext:    instance.Spec.SecurityContext,
+					ServiceAccountName: instance.GetNameWithSuffix(groupName),
+					SecurityContext:    securityContext,
 					Containers: []corev1.Container{
 						{
-							Name:            instance.Name,
-							Image:           instance.Spec.Image.Repository + ":" + instance.Spec.Image.Tag,
-							ImagePullPolicy: instance.Spec.Image.PullPolicy,
+							Name:            instance.GetNameWithSuffix(groupName),
+							Image:           image.Repository + ":" + image.Tag,
+							ImagePullPolicy: image.PullPolicy,
 							Args: []string{
 								"--configmap",
-								instance.GetNameWithSuffix("-controller"),
+								instance.GetNameWithSuffix(groupName),
 								"--executor-image",
 								"docker.io/bitnami/argo-workflow-exec:3.5.0-debian-11-r0",
 								"--executor-image-pull-policy",
@@ -114,7 +105,7 @@ func (r *ArgoWorkFlowReconciler) makeDeployment(instance *stackv1alpha1.ArgoWork
 								"32",
 							},
 							Env:       envVars,
-							Resources: *instance.Spec.Resources,
+							Resources: *resources,
 							Ports: []corev1.ContainerPort{
 								{
 									ContainerPort: 18080,
@@ -128,142 +119,120 @@ func (r *ArgoWorkFlowReconciler) makeDeployment(instance *stackv1alpha1.ArgoWork
 			},
 		},
 	}
+	CreateScheduler(instance, dep, roleGroup)
 
-	CreateScheduler(instance, dep)
-
-	err := ctrl.SetControllerReference(instance, dep, schema)
+	err := ctrl.SetControllerReference(instance, dep, scheme)
 	if err != nil {
-		r.Log.Error(err, "Failed to set controller reference for deployment")
-		return nil
+		r.Log.Error(err, "Failed to set controller reference for instance")
+		return nil, err
 	}
-	return dep
+	return dep, nil
 }
 
-func (r *ArgoWorkFlowReconciler) reconcileDeployment(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
-	obj := r.makeDeployment(instance, r.Scheme)
-	if obj == nil {
-		return nil
-	}
-	if err := CreateOrUpdate(ctx, r.Client, obj); err != nil {
-		logger.Error(err, "Failed to create or update deployment")
+// reconcile service account
+func (r *ArgoWorkFlowReconciler) reconcileServiceAccount(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
+	err := r.createOrUpdateResource(ctx, instance, r.extractServiceAccountForRoleGroup)
+	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
-func (r *ArgoWorkFlowReconciler) makeServiceAccount(instance *stackv1alpha1.ArgoWorkFlow, schema *runtime.Scheme) *corev1.ServiceAccount {
-	labels := instance.GetLabels()
+// extract service account for role group
+func (r *ArgoWorkFlowReconciler) extractServiceAccountForRoleGroup(instance *stackv1alpha1.ArgoWorkFlow, _ context.Context,
+	groupName string, roleGroup *stackv1alpha1.RoleConfigSpec, scheme *runtime.Scheme) (client.Object, error) {
+	mergeLabels := r.mergeLabels(instance.GetLabels(), roleGroup)
 	satoken := true
 	sa := &corev1.ServiceAccount{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.GetNameWithSuffix("-controller"),
+			Name:      instance.GetNameWithSuffix(groupName),
 			Namespace: instance.Namespace,
-			Labels:    labels,
+			Labels:    mergeLabels,
 		},
 		AutomountServiceAccountToken: &satoken,
 	}
-	err := ctrl.SetControllerReference(instance, sa, schema)
+	err := ctrl.SetControllerReference(instance, sa, scheme)
 	if err != nil {
 		r.Log.Error(err, "Failed to set controller reference for ServiceAccount")
-		return nil
+		return nil, err
 	}
-	return sa
+	return sa, err
 }
 
-func (r *ArgoWorkFlowReconciler) reconcileServiceAccount(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
-	obj := r.makeServiceAccount(instance, r.Scheme)
-	if obj == nil {
-		return nil
-	}
-
-	if err := CreateOrUpdate(ctx, r.Client, obj); err != nil {
-		r.Log.Error(err, "Failed to create or update ServiceAccount")
+// reconcile cluster role binding
+func (r *ArgoWorkFlowReconciler) reconcileClusterRoleBinding(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
+	err := r.createOrUpdateResource(ctx, instance, r.extractClusterRoleBindingForRoleGroup)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *ArgoWorkFlowReconciler) makeClusterRoleBinding(instance *stackv1alpha1.ArgoWorkFlow, schema *runtime.Scheme) *rbacv1.ClusterRoleBinding {
-	labels := instance.GetLabels()
-	subject := rbacv1.Subject{
-		Kind:      "ServiceAccount",
-		Name:      instance.GetNameWithSuffix("-controller"),
-		Namespace: instance.Namespace,
-	}
-	subjects := []rbacv1.Subject{subject}
+// extract cluster role binding for role group
+func (r *ArgoWorkFlowReconciler) extractClusterRoleBindingForRoleGroup(instance *stackv1alpha1.ArgoWorkFlow, _ context.Context,
+	groupName string, roleGroup *stackv1alpha1.RoleConfigSpec, scheme *runtime.Scheme) (client.Object, error) {
+	mergeLabels := r.mergeLabels(instance.GetLabels(), roleGroup)
 	crbd := &rbacv1.ClusterRoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.GetNameWithSuffix("-controller"),
+			Name:      instance.GetNameWithSuffix(groupName),
 			Namespace: instance.Namespace,
-			Labels:    labels,
+			Labels:    mergeLabels,
 		},
 		RoleRef: rbacv1.RoleRef{
 			APIGroup: "rbac.authorization.k8s.io",
 			Kind:     "ClusterRole",
 			Name:     "manager-role",
 		},
-		Subjects: subjects,
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      "ServiceAccount",
+				Name:      instance.GetNameWithSuffix(groupName),
+				Namespace: instance.Namespace,
+			},
+		},
 	}
-	err := ctrl.SetControllerReference(instance, crbd, schema)
+	err := ctrl.SetControllerReference(instance, crbd, scheme)
 	if err != nil {
 		r.Log.Error(err, "Failed to set controller reference for ClusterRoleBinding")
-		return nil
+		return nil, err
 	}
-	return crbd
+	return crbd, nil
 }
 
-func (r *ArgoWorkFlowReconciler) reconcileClusterRoleBinding(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
-	obj := r.makeClusterRoleBinding(instance, r.Scheme)
-	if obj == nil {
-		return nil
-	}
-
-	if err := CreateOrUpdate(ctx, r.Client, obj); err != nil {
-		r.Log.Error(err, "Failed to create or update ServiceAccount")
+// reconcile config map
+func (r *ArgoWorkFlowReconciler) reconcileConfigMap(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
+	err := r.createOrUpdateResource(ctx, instance, r.extractConfigMapForRoleGroup)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (r *ArgoWorkFlowReconciler) makeConfigMap(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow, schema *runtime.Scheme) *corev1.ConfigMap {
-	labels := instance.GetLabels()
-
+// extract config map for role group
+func (r *ArgoWorkFlowReconciler) extractConfigMapForRoleGroup(instance *stackv1alpha1.ArgoWorkFlow, _ context.Context,
+	groupName string, roleGroup *stackv1alpha1.RoleConfigSpec, scheme *runtime.Scheme) (client.Object, error) {
+	mergeLabels := r.mergeLabels(instance.GetLabels(), roleGroup)
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.GetNameWithSuffix("-controller"),
+			Name:      instance.GetNameWithSuffix(groupName),
 			Namespace: instance.Namespace,
-			Labels:    labels,
+			Labels:    mergeLabels,
 		},
 		Data: map[string]string{
 			"config": `
-parallelism:
-namespaceParallelism:
-executor:
-  resources:
-    limits: {}
-    requests: {}
-`,
+				parallelism:
+				namespaceParallelism:
+				executor:
+				  resources:
+					limits: {}
+					requests: {}
+			`,
 		},
 	}
-
-	err := ctrl.SetControllerReference(instance, configMap, schema)
+	err := ctrl.SetControllerReference(instance, configMap, scheme)
 	if err != nil {
 		r.Log.Error(err, "Failed to set controller reference for configmap")
-		return nil
+		return nil, err
 	}
-	return configMap
-}
-
-func (r *ArgoWorkFlowReconciler) reconcileConfigMap(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
-	obj := r.makeConfigMap(ctx, instance, r.Scheme)
-	if obj == nil {
-		return nil
-	}
-
-	if err := CreateOrUpdate(ctx, r.Client, obj); err != nil {
-		r.Log.Error(err, "Failed to create or update service")
-		return err
-	}
-	return nil
+	return configMap, nil
 }

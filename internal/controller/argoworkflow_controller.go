@@ -19,11 +19,10 @@ package controller
 import (
 	"context"
 	"github.com/go-logr/logr"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/retry"
-
 	stackv1alpha1 "github.com/zncdata-labs/argo-workflow-operator/api/v1alpha1"
+	"github.com/zncdata-labs/operator-go/pkg/status"
+	"github.com/zncdata-labs/operator-go/pkg/util"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,9 +69,9 @@ func (r *ArgoWorkFlowReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	r.Log.Info("Reconciling ArgoWorkFlow")
 
-	argoWorkflow := &stackv1alpha1.ArgoWorkFlow{}
+	instance := &stackv1alpha1.ArgoWorkFlow{}
 
-	if err := r.Get(ctx, req.NamespacedName, argoWorkflow); err != nil {
+	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		if client.IgnoreNotFound(err) != nil {
 			r.Log.Error(err, "unable to fetch ArgoWorkFlow")
 			return ctrl.Result{}, err
@@ -83,73 +82,45 @@ func (r *ArgoWorkFlowReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Get the status condition, if it exists and its generation is not the
 	//same as the ArgoWorkFlow's generation, reset the status conditions
-	readCondition := apimeta.FindStatusCondition(argoWorkflow.Status.Conditions, stackv1alpha1.ConditionTypeProgressing)
-	if readCondition == nil || readCondition.ObservedGeneration != argoWorkflow.GetGeneration() {
-		argoWorkflow.InitStatusConditions()
+	readCondition := apimeta.FindStatusCondition(instance.Status.Conditions, status.ConditionTypeProgressing)
+	if readCondition == nil || readCondition.ObservedGeneration != instance.GetGeneration() {
+		instance.InitStatusConditions()
 
-		if err := r.UpdateStatus(ctx, argoWorkflow); err != nil {
+		if err := util.UpdateStatus(ctx, r.Client, instance); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
-	r.Log.Info("ArgoWorkFlow found", "Name", argoWorkflow.Name)
+	r.Log.Info("ArgoWorkFlow found", "Name", instance.Name)
 
-	if err := r.reconcileDeployment(ctx, argoWorkflow); err != nil {
-		r.Log.Error(err, "unable to reconcile Deployment")
-		return ctrl.Result{}, err
+	tasks := []ReconcileTask[*stackv1alpha1.ArgoWorkFlow]{
+		{
+			resourceName:  Deployment,
+			reconcileFunc: r.reconcileDeployment,
+		},
+		{
+			resourceName:  Service,
+			reconcileFunc: r.reconcileService,
+		},
+		{
+			resourceName:  ServiceAccount,
+			reconcileFunc: r.reconcileServiceAccount,
+		},
+		{
+			resourceName:  RoleBinding,
+			reconcileFunc: r.reconcileClusterRoleBinding,
+		},
+		{
+			resourceName:  ConfigMap,
+			reconcileFunc: r.reconcileConfigMap,
+		},
 	}
 
-	if err := r.reconcileService(ctx, argoWorkflow); err != nil {
-		r.Log.Error(err, "unable to reconcile Service")
+	if err := ReconcileTasks(&tasks, ctx, instance, r, instance.Status, "hiveMetaStore"); err != nil {
 		return ctrl.Result{}, err
 	}
-
-	if err := r.reconcileServiceAccount(ctx, argoWorkflow); err != nil {
-		r.Log.Error(err, "unable to reconcile ServiceAccount")
-		return ctrl.Result{}, err
-	}
-
-	if err := r.reconcileClusterRoleBinding(ctx, argoWorkflow); err != nil {
-		r.Log.Error(err, "unable to reconcile ClusterRoleBinding")
-		return ctrl.Result{}, err
-	}
-
-	if err := r.reconcileConfigMap(ctx, argoWorkflow); err != nil {
-		r.Log.Error(err, "unable to reconcile ConfigMap")
-		return ctrl.Result{}, err
-	}
-
-	argoWorkflow.SetStatusCondition(metav1.Condition{
-		Type:               stackv1alpha1.ConditionTypeAvailable,
-		Status:             metav1.ConditionTrue,
-		Reason:             stackv1alpha1.ConditionReasonRunning,
-		Message:            "ArgoWorkFlow is running",
-		ObservedGeneration: argoWorkflow.GetGeneration(),
-	})
-
-	if err := r.UpdateStatus(ctx, argoWorkflow); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	r.Log.Info("Successfully reconciled ArgoWorkFlow")
 	return ctrl.Result{}, nil
-}
-
-// UpdateStatus updates the status of the ArgoWorkFlow resource
-// https://stackoverflow.com/questions/76388004/k8s-controller-update-status-and-condition
-func (r *ArgoWorkFlowReconciler) UpdateStatus(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {
-	retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		return r.Status().Update(ctx, instance)
-		//return r.Status().Patch(ctx, instance, client.MergeFrom(instance))
-	})
-
-	if retryErr != nil {
-		r.Log.Error(retryErr, "Failed to update vfm status after retries")
-		return retryErr
-	}
-
-	r.Log.V(1).Info("Successfully patched object status")
-	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
