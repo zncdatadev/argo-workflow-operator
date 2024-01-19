@@ -26,7 +26,8 @@ Dockerfile.cross
 *~
 
 # olm
-bundle### VisualStudioCode template
+bundle
+### VisualStudioCode template
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -188,3 +189,8 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+.vscode
+
+# operator
+bundle
+bundle.Dockerfile
