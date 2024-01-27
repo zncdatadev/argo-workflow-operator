@@ -3,10 +3,10 @@ kind: ClusterServiceVersion
 metadata:
   annotations:
     alm-examples: '[]'
+    capabilities: Basic Install
     categories: Schedule
     datasuit: Develop, Analysis
     icon: https://argoproj.github.io/argo-workflows/assets/images/favicon.png
-    capabilities: Basic Install
   name: argo-workflow-operator.v0.0.0
   namespace: placeholder
 spec:
