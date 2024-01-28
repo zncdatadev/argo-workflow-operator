@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+
 	stackv1alpha1 "github.com/zncdata-labs/argo-workflow-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -136,22 +137,6 @@ func (r *ArgoWorkFlowReconciler) makeDeployment(instance *stackv1alpha1.ArgoWork
 		return nil
 	}
 	return dep
-}
-
-func (r *ArgoWorkFlowReconciler) updateStatusConditionWithDeployment(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow, status metav1.ConditionStatus, message string) error {
-	instance.SetStatusCondition(metav1.Condition{
-		Type:               stackv1alpha1.ConditionTypeProgressing,
-		Status:             status,
-		Reason:             stackv1alpha1.ConditionReasonReconcileDeployment,
-		Message:            message,
-		ObservedGeneration: instance.GetGeneration(),
-		LastTransitionTime: metav1.Now(),
-	})
-
-	if err := r.UpdateStatus(ctx, instance); err != nil {
-		return err
-	}
-	return nil
 }
 
 func (r *ArgoWorkFlowReconciler) reconcileDeployment(ctx context.Context, instance *stackv1alpha1.ArgoWorkFlow) error {

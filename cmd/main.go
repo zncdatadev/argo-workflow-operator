@@ -18,8 +18,9 @@ package main
 
 import (
 	"flag"
-	"github.com/zncdata-labs/argo-workflow-operator/internal/controller"
 	"os"
+
+	"github.com/zncdata-labs/argo-workflow-operator/internal/controller"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -37,9 +38,8 @@ import (
 )
 
 var (
-	scheme       = runtime.NewScheme()
-	setupLog     = ctrl.Log.WithName("setup")
-	reconcileLog = ctrl.Log.WithName("reconciling")
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
 )
 
 func init() {
