@@ -18,10 +18,11 @@ package controller
 
 import (
 	"context"
+
 	"github.com/go-logr/logr"
-	stackv1alpha1 "github.com/zncdata-labs/argo-workflow-operator/api/v1alpha1"
-	"github.com/zncdata-labs/operator-go/pkg/status"
-	"github.com/zncdata-labs/operator-go/pkg/util"
+	stackv1alpha1 "github.com/zncdatadev/argo-workflow-operator/api/v1alpha1"
+	"github.com/zncdatadev/operator-go/pkg/status"
+	"github.com/zncdatadev/operator-go/pkg/util"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
