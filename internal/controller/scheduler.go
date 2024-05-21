@@ -1,7 +1,7 @@
 package controller
 
 import (
-	stackv1alpha1 "github.com/zncdata-labs/argo-workflow-operator/api/v1alpha1"
+	stackv1alpha1 "github.com/zncdatadev/argo-workflow-operator/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )

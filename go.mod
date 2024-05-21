@@ -1,4 +1,4 @@
-module github.com/zncdata-labs/argo-workflow-operator
+module github.com/zncdatadev/argo-workflow-operator
 
 go 1.21
 
@@ -7,7 +7,7 @@ require (
 	github.com/go-logr/logr v1.3.0
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.29.0
-	github.com/zncdata-labs/operator-go v0.2.0
+	github.com/zncdatadev/operator-go v0.2.0
 	k8s.io/api v0.29.0
 	k8s.io/apimachinery v0.29.0
 	k8s.io/client-go v0.29.0

@@ -3,9 +3,10 @@ package controller
 import (
 	"context"
 	"fmt"
-	"github.com/zncdata-labs/operator-go/pkg/status"
-	"github.com/zncdata-labs/operator-go/pkg/util"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/zncdatadev/operator-go/pkg/status"
+	"github.com/zncdatadev/operator-go/pkg/util"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 

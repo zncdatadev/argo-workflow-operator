@@ -20,7 +20,7 @@ import (
 	"flag"
 	"os"
 
-	"github.com/zncdata-labs/argo-workflow-operator/internal/controller"
+	"github.com/zncdatadev/argo-workflow-operator/internal/controller"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -33,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	stackv1alpha1 "github.com/zncdata-labs/argo-workflow-operator/api/v1alpha1"
+	stackv1alpha1 "github.com/zncdatadev/argo-workflow-operator/api/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 
